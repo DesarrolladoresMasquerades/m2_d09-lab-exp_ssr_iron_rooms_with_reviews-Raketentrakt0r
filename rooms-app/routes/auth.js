@@ -5,7 +5,7 @@ const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 
 // How many rounds should bcrypt run the salt (default [10 - 12 rounds])
-const saltRounds = 5;
+const saltRounds = 6;
 
 // Require the User model in order to interact with the database
 const User = require("../models/User.model");
@@ -27,12 +27,25 @@ router.post("/signup", isLoggedOut, (req, res) => {
       .render("auth/signup", { errorMessage: "Please provide your username." });
   }
 
-  if (password.length < 5) {
+  if (password.length < 6) {
     return res.status(400).render("auth/signup", {
       errorMessage: "Your password needs to be at least 8 characters long.",
     });
   }
 
+  User.findOne({username}).then((user)=>{
+    if(user && user.username){
+      res.render("auth/signup", {errorMessage: "User already taken!"})
+      throw new Error("Validation error")
+    }
+  })
+
+  const salt = bcrypt.genSaltSync(saltRounds)
+  const hashedPassword = bcrypt.genSaltSync(password,salt )
+
+  User.create({username,email, password: hashedPassword})
+    .then(()=> res.redirect("/"))
+    
   //   ! This use case is using a regular expression to control for special characters and min length
   
   const regex = /(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}/;
@@ -48,7 +61,7 @@ router.post("/signup", isLoggedOut, (req, res) => {
   // Search the database for a user with the username submitted in the form
   User.findOne({ username }).then((found) => {
     // If the user is found, send the message username is taken
-    if (found) {
+    if (!found) {
       return res
         .status(400)
         .render("auth/signup", { errorMessage: "Username already taken." });
@@ -69,7 +82,8 @@ router.post("/signup", isLoggedOut, (req, res) => {
       .then((user) => {
         // Bind the user to the session object
         req.session.user = user;
-        res.redirect("/");
+        console.log("auth/login")
+        res.redirect("/auth/login");
       })
       .catch((error) => {
         if (error instanceof mongoose.Error.ValidationError) {
@@ -105,7 +119,7 @@ router.post("/login", isLoggedOut, (req, res, next) => {
 
   // Here we use the same logic as above
   // - either length based parameters or we check the strength of a password
-  if (password.length < 8) {
+  if (password.length < 5) {
     return res.status(400).render("auth/login", {
       errorMessage: "Your password needs to be at least 8 characters long.",
     });
